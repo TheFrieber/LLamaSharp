@@ -24,8 +24,8 @@ namespace LLama
             private const string defaultSystemName = "System";
             private const string defaultUnknownName = "??";
 
-            private  string _userName;
-            private  string _assistantName;
+            private string _userName;
+            private string _assistantName;
             private readonly string _systemName;
             private readonly string _unknownName;
             private readonly bool _isInstructMode;
@@ -44,7 +44,7 @@ namespace LLama
             /// <param name="systemName"></param>
             /// <param name="unknownName"></param>
             /// <param name="isInstructMode"></param>
-            public DefaultHistoryTransform(string? userName = null, string? assistantName = null, 
+            public DefaultHistoryTransform(string? userName = null, string? assistantName = null,
                 string? systemName = null, string? unknownName = null, bool isInstructMode = false)
             {
                 _userName = userName ?? defaultUserName;
@@ -215,7 +215,7 @@ namespace LLama
                 int maxKeywordLength,
                 bool removeAllMatchedTokens)
             {
-                _keywords = [ ..keywords ];
+                _keywords = [.. keywords];
                 _maxKeywordLength = maxKeywordLength;
                 _removeAllMatchedTokens = removeAllMatchedTokens;
             }
@@ -231,7 +231,7 @@ namespace LLama
             /// <param name="removeAllMatchedTokens">If set to true, when getting a matched keyword, all the related tokens will be removed. Otherwise only the part of keyword will be removed.</param>
             public KeywordTextOutputStreamTransform(IEnumerable<string> keywords, int redundancyLength = 3, bool removeAllMatchedTokens = false)
             {
-                _keywords = [ ..keywords ];
+                _keywords = [.. keywords];
                 _maxKeywordLength = _keywords.Max(x => x.Length) + redundancyLength;
                 _maxKeywordLength = _keywords.Select(x => x.Length).Max() + redundancyLength;
                 _removeAllMatchedTokens = removeAllMatchedTokens;
@@ -262,7 +262,7 @@ namespace LLama
                         }
                         if (!_removeAllMatchedTokens)
                         {
-                            foreach(var keyword in matchedKeywords)
+                            foreach (var keyword in matchedKeywords)
                             {
                                 current = current.Replace(keyword, "");
                             }

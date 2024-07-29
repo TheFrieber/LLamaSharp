@@ -180,7 +180,7 @@ public class ChatSession
     {
         var executorState = ((StatefulExecutorBase)Executor).GetStateData();
         return new SessionState(
-            executorState.PastTokensCount > 0 
+            executorState.PastTokensCount > 0
             ? Executor.Context.GetState() : null,
             executorState,
             History,
@@ -236,7 +236,7 @@ public class ChatSession
         if (state.ExecutorState is null)
         {
             var executorPath = Path.Combine(path, EXECUTOR_STATE_FILENAME);
-            ((StatefulExecutorBase) Executor).LoadState(filename: executorPath); 
+            ((StatefulExecutorBase)Executor).LoadState(filename: executorPath);
         }
         LoadSession(state, loadTransforms);
     }
@@ -311,7 +311,7 @@ public class ChatSession
     /// <returns></returns>
     public ChatSession RemoveLastMessage()
     {
-        if(History.Messages.Count >= 1)
+        if (History.Messages.Count >= 1)
         {
             History.Messages.RemoveAt(History.Messages.Count - 1);
             return this;
@@ -428,7 +428,7 @@ public class ChatSession
         }
 
         // Add the user's message to the history
-        if(!string.IsNullOrEmpty(message.Content))
+        if (!string.IsNullOrEmpty(message.Content))
             AddUserMessage(message.Content);
 
         // Prepare prompt variable
@@ -638,7 +638,7 @@ public record SessionState
     /// <summary>
     /// The input transform pipeline used in this session.
     /// </summary>
-    public ITextTransform[] InputTransformPipeline { get; set; } = [ ];
+    public ITextTransform[] InputTransformPipeline { get; set; } = [];
 
     /// <summary>
     /// The output transform used in this session.
@@ -649,11 +649,11 @@ public record SessionState
     /// The history transform used in this session.
     /// </summary>
     public IHistoryTransform HistoryTransform { get; set; } = new LLamaTransforms.DefaultHistoryTransform();
-    
+
     /// <summary>
     /// The the chat history messages for this session.
     /// </summary>
-    public ChatHistory.Message[] History { get; set; } = [ ];
+    public ChatHistory.Message[] History { get; set; } = [];
 
     /// <summary>
     /// Create a new session state.
@@ -665,7 +665,7 @@ public record SessionState
     /// <param name="outputTransform"></param>
     /// <param name="historyTransform"></param>
     public SessionState(
-        State? contextState, ExecutorBaseState executorState, 
+        State? contextState, ExecutorBaseState executorState,
         ChatHistory history, List<ITextTransform> inputTransformPipeline,
         ITextStreamTransform outputTransform, IHistoryTransform historyTransform)
     {
@@ -752,10 +752,10 @@ public record SessionState
         ITextTransform[] inputTransforms;
         try
         {
-            inputTransforms = File.Exists(inputTransformFilepath) ? 
+            inputTransforms = File.Exists(inputTransformFilepath) ?
                 (JsonSerializer.Deserialize<ITextTransform[]>(File.ReadAllText(inputTransformFilepath))
                 ?? throw new ArgumentException("Input transform file is invalid", nameof(path)))
-                : [ ];
+                : [];
         }
         catch (JsonException)
         {
@@ -763,11 +763,11 @@ public record SessionState
         }
 
         string outputTransformFilepath = Path.Combine(path, ChatSession.OUTPUT_TRANSFORM_FILENAME);
-        
+
         ITextStreamTransform outputTransform;
         try
         {
-            outputTransform = File.Exists(outputTransformFilepath) ? 
+            outputTransform = File.Exists(outputTransformFilepath) ?
             (JsonSerializer.Deserialize<ITextStreamTransform>(File.ReadAllText(outputTransformFilepath))
                        ?? throw new ArgumentException("Output transform file is invalid", nameof(path)))
             : new LLamaTransforms.EmptyTextOutputStreamTransform();
@@ -781,7 +781,7 @@ public record SessionState
         IHistoryTransform historyTransform;
         try
         {
-            historyTransform = File.Exists(historyTransformFilepath) ? 
+            historyTransform = File.Exists(historyTransformFilepath) ?
                 (JsonSerializer.Deserialize<IHistoryTransform>(File.ReadAllText(historyTransformFilepath))
                            ?? throw new ArgumentException("History transform file is invalid", nameof(path)))
                 : new LLamaTransforms.DefaultHistoryTransform();

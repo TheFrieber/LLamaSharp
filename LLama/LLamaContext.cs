@@ -86,7 +86,7 @@ namespace LLama
         /// Get the special tokens for the model associated with this context
         /// </summary>
         public SafeLlamaModelHandle.ModelTokens Tokens { get; }
-        
+
         private LLamaTokenData[]? _samplingBuffer;
 
         /// <summary>
@@ -414,7 +414,7 @@ namespace LLama
         /// <param name="grammar"></param>
         /// <param name="minP"></param>
         /// <returns></returns>
-        public LLamaToken Sample(LLamaTokenDataArray candidates, ref float? mirostat_mu, float temperature, MirostatType mirostat, 
+        public LLamaToken Sample(LLamaTokenDataArray candidates, ref float? mirostat_mu, float temperature, MirostatType mirostat,
                                  float mirostatTau, float mirostatEta, int topK, float topP, float tfsZ, float typicalP,
                                  SafeLLamaGrammarHandle? grammar, float minP)
         {
@@ -476,8 +476,8 @@ namespace LLama
         /// <param name="alphaPresence"></param>
         /// <param name="penalizeNL"></param>
         /// <returns></returns>
-        public LLamaTokenDataArray ApplyPenalty(int logits_i, IEnumerable<LLamaToken> lastTokens, Dictionary<LLamaToken, float>? logitBias = null, 
-                                                int repeatLastTokensCount = 64, float repeatPenalty = 1.1f, float alphaFrequency = .0f, float alphaPresence = .0f, 
+        public LLamaTokenDataArray ApplyPenalty(int logits_i, IEnumerable<LLamaToken> lastTokens, Dictionary<LLamaToken, float>? logitBias = null,
+                                                int repeatLastTokensCount = 64, float repeatPenalty = 1.1f, float alphaFrequency = .0f, float alphaPresence = .0f,
                                                 bool penalizeNL = true)
         {
             var logits = NativeHandle.GetLogitsIth(logits_i);
@@ -554,7 +554,7 @@ namespace LLama
         {
             return Task.Run(() => Decode(batch), cancellationToken);
         }
-        
+
         /// <summary>
         /// </summary>
         /// <param name="batch"></param>
@@ -564,10 +564,10 @@ namespace LLama
                 return 0;
             if (batch.EmbeddingsCount > BatchSize)
                 throw new ArgumentException("Input contains more tokens than configured batch size", nameof(batch));
-            
+
             return (DecodeResult)NativeHandle.Decode(batch);
         }
-        
+
         /// <summary>
         /// </summary>
         /// <param name="batch"></param>
@@ -591,7 +591,7 @@ namespace LLama
                 var past = n_past;
                 var res = NativeHandle.Decode(tokens, id, batch, ref past);
                 return (res.Item1, res.Item2, past);
-                });
+            });
         }
         #endregion
 
