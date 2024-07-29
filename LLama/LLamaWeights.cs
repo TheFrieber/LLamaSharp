@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
@@ -48,6 +48,11 @@ namespace LLama
         public int EmbeddingSize => NativeHandle.EmbeddingSize;
 
         /// <summary>
+        /// To check whether context is disposed.
+        /// </summary>
+        private bool _disposed = true;
+
+        /// <summary>
         /// Get the special tokens of this model
         /// </summary>
         public SafeLlamaModelHandle.ModelTokens Tokens => NativeHandle.Tokens;
@@ -61,6 +66,7 @@ namespace LLama
         {
             NativeHandle = weights;
             Metadata = weights.ReadMetadata();
+            _disposed = false;
         }
 
         /// <summary>
@@ -180,6 +186,7 @@ namespace LLama
                     }
                 }, token);
 
+                
                 return model;
             }
         }
@@ -188,7 +195,18 @@ namespace LLama
         public void Dispose()
         {
             NativeHandle.Dispose();
+            _disposed = true;
         }
+
+
+        /// <summary>
+        /// Check if model is disposed
+        /// </summary>
+        public bool IsDisposed()
+        {
+            return _disposed;
+        }
+
 
         /// <summary>
         /// Create a llama_context using this model
@@ -198,7 +216,10 @@ namespace LLama
         /// <returns></returns>
         public LLamaContext CreateContext(IContextParams @params, ILogger? logger = null)
         {
-            return new LLamaContext(this, @params, logger);
+            LLamaContext lmx = new LLamaContext(this, @params, logger);
+            GC.Collect();
+            _disposed = false;
+            return lmx;
         }
 
         /// <summary>

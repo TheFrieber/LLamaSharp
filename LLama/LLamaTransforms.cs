@@ -24,8 +24,8 @@ namespace LLama
             private const string defaultSystemName = "System";
             private const string defaultUnknownName = "??";
 
-            private readonly string _userName;
-            private readonly string _assistantName;
+            private  string _userName;
+            private  string _assistantName;
             private readonly string _systemName;
             private readonly string _unknownName;
             private readonly bool _isInstructMode;
@@ -92,6 +92,25 @@ namespace LLama
                 ChatHistory history = new ChatHistory();
                 history.AddMessage(role, TrimNamesFromText(text, role));
                 return history;
+            }
+
+
+            /// <summary>
+            /// Set the Username.
+            /// </summary>
+            /// <param name="userName"></param>
+            public void SetUserName(string userName)
+            {
+                _userName = userName;
+            }
+
+            /// <summary>
+            /// Set the AI name.
+            /// </summary>
+            /// <param name="assistantName"></param>
+            public void SetAssistantName(string assistantName)
+            {
+                _assistantName = assistantName;
             }
 
             /// <summary>

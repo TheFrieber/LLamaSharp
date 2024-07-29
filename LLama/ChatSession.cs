@@ -119,6 +119,15 @@ public class ChatSession
         History = history;
     }
 
+
+    /// <summary>
+    /// Get the REAL history.
+    /// </summary>
+    public ChatHistory GetOriginalHistory()
+    {
+        return History;
+    }
+
     /// <summary>
     /// Use a custom history transform.
     /// </summary>
@@ -252,7 +261,7 @@ public class ChatSession
             ChatHistory.Message? lastMessage = History.Messages.LastOrDefault();
             if (lastMessage is not null && lastMessage.AuthorRole == AuthorRole.User)
             {
-                throw new ArgumentException("Cannot add a user message after another user message", nameof(message));
+                //throw new ArgumentException("Cannot add a user message after another user message", nameof(message));
             }
         }
 
@@ -264,7 +273,7 @@ public class ChatSession
             if (lastMessage is null
                 || lastMessage.AuthorRole != AuthorRole.User)
             {
-                throw new ArgumentException("Assistant message must be preceded with a user message", nameof(message));
+                //throw new ArgumentException("Assistant message must be preceded with a user message", nameof(message));
             }
         }
 
@@ -302,7 +311,11 @@ public class ChatSession
     /// <returns></returns>
     public ChatSession RemoveLastMessage()
     {
-        History.Messages.RemoveAt(History.Messages.Count - 1);
+        if(History.Messages.Count >= 1)
+        {
+            History.Messages.RemoveAt(History.Messages.Count - 1);
+            return this;
+        }
         return this;
     }
 
@@ -415,7 +428,8 @@ public class ChatSession
         }
 
         // Add the user's message to the history
-        AddUserMessage(message.Content);
+        if(!string.IsNullOrEmpty(message.Content))
+            AddUserMessage(message.Content);
 
         // Prepare prompt variable
         string prompt;

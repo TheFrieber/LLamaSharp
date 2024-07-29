@@ -44,6 +44,11 @@ namespace LLama
         public IContextParams Params { get; }
 
         /// <summary>
+        /// To check whether context is disposed.
+        /// </summary>
+        private bool _disposed = true;
+
+        /// <summary>
         /// The native handle, which is used to be passed to the native APIs
         /// </summary>
         /// <remarks>Be careful how you use this!</remarks>
@@ -103,6 +108,7 @@ namespace LLama
 
             @params.ToLlamaContextParams(out var lparams);
             NativeHandle = SafeLLamaContextHandle.Create(model.NativeHandle, lparams);
+            _disposed = false;
 
             Tokens = model.Tokens;
         }
@@ -593,6 +599,16 @@ namespace LLama
         public void Dispose()
         {
             NativeHandle.Dispose();
+            GC.Collect();
+            _disposed = true;
+        }
+
+        /// <summary>
+        /// Check if context is disposed
+        /// </summary>
+        public bool IsDisposed()
+        {
+            return _disposed;
         }
 
         /// <summary>
@@ -602,6 +618,7 @@ namespace LLama
             : SafeLLamaHandleBase
         {
             private readonly ulong _size;
+            public IntPtr Data { get; }
             /// <summary>
             /// Get the size in bytes of this state object
             /// </summary>
@@ -610,6 +627,7 @@ namespace LLama
             internal State(IntPtr memory, ulong size)
                 : base(memory, true)
             {
+                Data = memory;
                 _size = size;
             }
 
