@@ -817,6 +817,52 @@ public class ChatSession
             yield return textToken;
         }
     }
+
+
+
+
+
+
+
+
+
+
+    /// <summary>
+    /// KoboldCS: We need a function to define where Memory is. And then we need to merge Memory into the history.
+    /// </summary>
+    /// <param name="chatMemory"></param>
+    /// <returns></returns>
+    public void SetMemory(ChatHistory chatMemory)
+    {
+        if (History.Messages.Count == 0)
+            goto skipcheck;
+
+        if (History.Messages[0].AuthorRole == AuthorRole.Unknown)
+            History.Messages.RemoveAt(0); // We don't want dupes
+
+        skipcheck:
+        // First, we want to know here the Memory will end.
+        Bridge.MemPos = Executor.Context.Tokenize(chatMemory.Messages[0].Content, false, true).Count();
+
+        // I may put things into two lines for the shake of eyes. This is because Count starts with 1 and kv cache with 0
+        Bridge.MemPos--;
+
+
+        //Now merge.
+        History.Messages.Insert(0, chatMemory.Messages[0]);
+    }
+
+
+    /// <summary>
+    /// KoboldCS: We can't access the Library bridge directly. So we need some sort of an entry to the bridge.
+    /// </summary>
+    /// <param name="maximumT">Maximum Tokens the AI gens</param>
+    /// <returns></returns>
+    public void UpdateConfiguration(int maximumT)
+    {
+        Bridge.MaxTokens = maximumT;
+    }
+
 }
 
 /// <summary>

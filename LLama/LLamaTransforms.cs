@@ -112,6 +112,22 @@ namespace LLama
 
 
             /// <summary>
+            /// Convert a ChatHistory instance to plain text for instruct mode.
+            /// </summary>
+            /// <param name="history">The ChatHistory instance</param>
+            /// <returns>A plain text representation of the history without names/roles.</returns>
+            public virtual string HistoryToTextInstruct(ChatHistory history)
+            {
+                StringBuilder sb = new();
+                foreach (var message in history.Messages)
+                {
+                    sb.AppendLine($"{message.Content}");
+
+                }
+                return sb.ToString();
+            }
+
+            /// <summary>
             /// Set the Username.
             /// </summary>
             /// <param name="userName"></param>
