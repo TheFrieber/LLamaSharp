@@ -482,7 +482,7 @@ namespace LLama
                                                 bool penalizeNL = true)
         {
             Console.WriteLine("AP1");
-            var logits = NativeHandle.GetLogitsIth(0);
+            var logits = NativeHandle.GetLogitsIth(logits_i);
 
             // Apply params.logit_bias map
             if (logitBias is not null)
