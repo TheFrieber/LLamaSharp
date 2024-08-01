@@ -1,4 +1,4 @@
-﻿using LLama.Common;
+using LLama.Common;
 using System.Text.Json.Serialization;
 
 namespace LLama.Abstractions
@@ -15,7 +15,14 @@ namespace LLama.Abstractions
         /// <param name="history">The ChatHistory instance</param>
         /// <returns></returns>
         string HistoryToText(ChatHistory history);
-        
+
+        /// <summary>
+        /// Convert a ChatHistory instance to plain text (Instruct Mode).
+        /// </summary>
+        /// <param name="history">The ChatHistory instance</param>
+        /// <returns></returns>
+        string HistoryToTextInstruct(ChatHistory history);
+
         /// <summary>
         /// Converts plain text to a ChatHistory instance.
         /// </summary>

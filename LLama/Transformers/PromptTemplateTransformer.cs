@@ -30,6 +30,22 @@ public class PromptTemplateTransformer(LLamaWeights model,
     }
 
     /// <inheritdoc />
+    public string HistoryToTextInstruct(ChatHistory history)
+    {
+        var template = new LLamaTemplate(_model.NativeHandle)
+        {
+            AddAssistant = _withAssistant,
+        };
+
+        // encode each message and return the final prompt
+        foreach (var message in history.Messages)
+        {
+            template.Add(message.AuthorRole.ToString().ToLowerInvariant(), message.Content);
+        }
+        return ToModelPrompt(template);
+    }
+
+    /// <inheritdoc />
     public ChatHistory TextToHistory(AuthorRole role, string text)
     {
         return new ChatHistory([new ChatHistory.Message(role, text)]);

@@ -248,11 +248,15 @@ public class ChatSession
     /// <returns></returns>
     public ChatSession AddMessage(ChatHistory.Message message)
     {
+        //KoboldCS: Those checks are bullshit.
+
+
         // If current message is a system message, only allow the history to be empty
         if (message.AuthorRole == AuthorRole.System && History.Messages.Count > 0)
         {
             throw new ArgumentException("Cannot add a system message after another message", nameof(message));
         }
+
 
         // If current message is a user message, only allow the history to be empty,
         // or the previous message to be a system message or assistant message.
@@ -280,6 +284,49 @@ public class ChatSession
         History.AddMessage(message.AuthorRole, message.Content);
         return this;
     }
+
+
+
+
+
+    /// <summary>
+    /// KoboldCS: We need a function to define where Memory is. And then we need to merge Memory into the history.
+    /// </summary>
+    /// <param name="chatMemory"></param>
+    /// <returns></returns>
+    public void SetMemory(ChatHistory chatMemory)
+    {
+        if (History.Messages.Count == 0)
+            goto skipcheck;
+
+        if (History.Messages[0].AuthorRole == AuthorRole.Unknown)
+            History.Messages.RemoveAt(0); // We don't want dupes
+
+        skipcheck:
+        // First, we want to know here the Memory will end.
+        Bridge.MemPos = Executor.Context.Tokenize(chatMemory.Messages[0].Content, false, true).Count();
+
+        // I may put things into two lines for the shake of eyes. This is because Count starts with 1 and kv cache with 0
+        Bridge.MemPos--;
+
+
+        //Now merge.
+        History.Messages.Insert(0, chatMemory.Messages[0]);
+    }
+
+
+    /// <summary>
+    /// KoboldCS: We can't access the Library bridge directly. So we need some sort of an entry to the bridge.
+    /// </summary>
+    /// <param name="maximumT">Maximum Tokens the AI gens</param>
+    /// <returns></returns>
+    public void UpdateConfiguration(int maximumT)
+    {
+        Bridge.MaxTokens = maximumT;
+    }
+
+
+
 
     /// <summary>
     /// Add a system message to the chat history.
@@ -397,6 +444,18 @@ public class ChatSession
         return this;
     }
 
+
+
+
+
+
+
+
+
+
+    #region KOBOLDCS CUSTOM 'INSTRUCTEXECUTOR'
+
+
     /// <summary>
     /// Chat with the model.
     /// </summary>
@@ -406,7 +465,7 @@ public class ChatSession
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     /// <exception cref="ArgumentException"></exception>
-    public async IAsyncEnumerable<string> ChatAsync(
+    public async IAsyncEnumerable<string> InstructAsync(
         ChatHistory.Message message,
         bool applyInputTransformPipeline,
         IInferenceParams? inferenceParams = null,
@@ -438,6 +497,143 @@ public class ChatSession
         // or added as part of new chat session history.
         InteractiveExecutorState state = (InteractiveExecutorState)((StatefulExecutorBase)Executor).GetStateData();
 
+        // If "IsPromptRun" is true, the session was newly started.
+        if (state.IsPromptRun)
+        {
+            // If the session history was added as part of new chat session history,
+            // convert the complete history includsing system message and manually added history
+            // to a prompt that adhere to the prompt template specified in the HistoryTransform class implementation.
+            prompt = HistoryTransform.HistoryToTextInstruct(History);
+        }
+        else
+        {
+            // If the session was restored from a previous session,
+            // convert only the current message to the prompt with the prompt template
+            // specified in the HistoryTransform class implementation that is provided.
+            ChatHistory singleMessageHistory = HistoryTransform.TextToHistory(message.AuthorRole, message.Content);
+            prompt = HistoryTransform.HistoryToText(singleMessageHistory);
+        }
+
+        string assistantMessage = string.Empty;
+
+        await foreach (
+            string textToken
+            in ChatAsyncInternal(
+                prompt,
+                inferenceParams,
+                cancellationToken))
+        {
+            assistantMessage += textToken;
+            yield return textToken;
+        }
+
+        // Add the assistant message to the history
+        AddAssistantMessage(assistantMessage);
+    }
+
+    /// <summary>
+    /// Chat with the model.
+    /// </summary>
+    /// <param name="message"></param>
+    /// <param name="inferenceParams"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    public IAsyncEnumerable<string> InstructAsync(
+        ChatHistory.Message message,
+        IInferenceParams? inferenceParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        return InstructAsync(
+            message,
+            applyInputTransformPipeline: true,
+            inferenceParams,
+            cancellationToken);
+    }
+
+
+    #endregion
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /// <summary>
+    /// Chat with the model.
+    /// </summary>
+    /// <param name="message"></param>
+    /// <param name="inferenceParams"></param>
+    /// <param name="applyInputTransformPipeline"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    public async IAsyncEnumerable<string> ChatAsync(
+        ChatHistory.Message message,
+        bool applyInputTransformPipeline,
+        IInferenceParams? inferenceParams = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        Console.WriteLine("ChatAsync Hit.");
+        // The message must be a user message
+        if (message.AuthorRole != AuthorRole.User)
+        {
+            throw new ArgumentException("Message must be a user message", nameof(message));
+        }
+
+        // Apply input transform pipeline
+        // KoboldCS: Unused.
+        if (applyInputTransformPipeline)
+        {
+            foreach (var inputTransform in InputTransformPipeline)
+            {
+                message.Content = inputTransform.Transform(message.Content);
+            }
+        }
+
+        // Add the user's message to the history
+        if (!string.IsNullOrEmpty(message.Content))
+            AddUserMessage(message.Content);
+
+        // Prepare prompt variable
+        string prompt;
+
+        // Check if the session history was restored from a previous session
+        // or added as part of new chat session history.
+        InteractiveExecutorState state = (InteractiveExecutorState)((StatefulExecutorBase)Executor).GetStateData();
+
+        // (KoboldCS) TheFrieber: This sh*ty statement it was that cost me over one day to find out why Context and History are not synchron... (ik skill issue.)
         // If "IsPromptRun" is true, the session was newly started.
         if (state.IsPromptRun)
         {
@@ -607,11 +803,14 @@ public class ChatSession
         IInferenceParams? inferenceParams = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        Console.WriteLine("ChatAsyncInternal Hit.");
+
         var results = Executor.InferAsync(prompt, inferenceParams, cancellationToken);
 
         await foreach (
             string textToken
-            in OutputTransform
+            in 
+            OutputTransform
                 .TransformAsync(results)
                 .WithCancellation(cancellationToken))
         {

@@ -192,16 +192,25 @@ namespace LLama
         /// <param name="tokensToKeep"></param>
         protected virtual void HandleRunOutOfContext(int tokensToKeep)
         {
+
             // if we run out of context:
             // - take the tokensToKeep first tokens from the original prompt (via n_past)
             // - take half of the last (n_ctx - tokensToKeep) tokens and recompute the logits in batches
-            int n_left = _pastTokensCount - tokensToKeep;
-            int n_discard = n_left / 2;
+            // KoboldCS: We def don't want to erase half of the context.
+            //int n_left = _pastTokensCount - tokensToKeep;
+            //int n_discard = n_left / 2;
 
-            NativeApi.llama_kv_cache_seq_rm(Context.NativeHandle, LLamaSeqId.Zero, tokensToKeep, tokensToKeep + n_discard);
-            NativeApi.llama_kv_cache_seq_add(Context.NativeHandle, LLamaSeqId.Zero, tokensToKeep + n_discard, _pastTokensCount, -n_discard);
+            //This makes sure that we only remove space we will use.
 
-            _pastTokensCount -= n_discard;
+            NativeApi.llama_kv_cache_seq_rm(Context.NativeHandle, LLamaSeqId.Zero, Bridge.MemPos, Bridge.MemPos + Bridge.MaxTokens);
+            NativeApi.llama_kv_cache_seq_add(Context.NativeHandle, LLamaSeqId.Zero, Bridge.MemPos + Bridge.MaxTokens, _pastTokensCount, -Bridge.MaxTokens);
+
+
+            _pastTokensCount -= Bridge.MaxTokens;
+
+            Console.WriteLine("[Native] Context Shift Applied: " + Bridge.MaxTokens);
+
+
             // stop saving session if we run out of context
             _pathSession = string.Empty;
         }

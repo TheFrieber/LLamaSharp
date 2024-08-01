@@ -228,131 +228,153 @@ namespace LLama
         /// <inheritdoc />
         protected override async Task InferInternal(IInferenceParams inferenceParams, InferStateArgs args)
         {
-            var batch = new LLamaBatch();
-
-            if (_embeds.Count > 0)
+            try
             {
-                _is_prompt_run = false;
-                if (_pastTokensCount + _embeds.Count > Context.ContextSize)
+                Console.WriteLine("1");
+                var batch = new LLamaBatch();
+
+                if (_embeds.Count > 0)
                 {
-                    // number of tokens to keep when resetting context
-                    // Ported from https://github.com/ggerganov/llama.cpp/blob/60325fa56f61c228464c9f065db3aa6a61f2156e/examples/main/main.cpp#L334
-                    var tokensToKeep = inferenceParams.TokensKeep;
-                    if (tokensToKeep < 0 || tokensToKeep > _embed_inps.Count)
+                    _is_prompt_run = false;
+                    if (_pastTokensCount + _embeds.Count > Context.ContextSize)
                     {
-                        tokensToKeep = _embed_inps.Count;
+                        Console.WriteLine("2");
+                        // number of tokens to keep when resetting context
+                        // Ported from https://github.com/ggerganov/llama.cpp/blob/60325fa56f61c228464c9f065db3aa6a61f2156e/examples/main/main.cpp#L334
+                        var tokensToKeep = inferenceParams.TokensKeep;
+                        if (tokensToKeep < 0 || tokensToKeep > _embed_inps.Count)
+                        {
+                            tokensToKeep = _embed_inps.Count;
+                        }
+                        else
+                        {
+                            tokensToKeep += Convert.ToInt32(Context.ShouldAddBosToken()); // always keep the BOS token
+                        }
+
+                        HandleRunOutOfContext(tokensToKeep);
+                    }
+                    Console.WriteLine("3");
+                    TryReuseMatchingPrefix();
+
+                    Console.WriteLine("4");
+                    // Changes to support Multi-Modal LLMs.
+                    //
+                    (DecodeResult, int, int) header, end, result;
+                    if (IsMultiModal && _EmbedImagePosition > 0)
+                    {
+                        // Tokens previous to the images
+                        header = await Context.DecodeAsync(_embeds.GetRange(0, _EmbedImagePosition), LLamaSeqId.Zero, batch, _pastTokensCount);
+                        _pastTokensCount = header.Item3;
+
+                        if (header.Item1 != DecodeResult.Ok) throw new LLamaDecodeError(header.Item1);
+
+                        // Images
+                        foreach (var image in _imageEmbedHandles)
+                            ClipModel.EvalImageEmbed(Context, image, ref _pastTokensCount);
+
+                        // Post-image Tokens
+                        end = await Context.DecodeAsync(_embeds.GetRange(_EmbedImagePosition, _embeds.Count - _EmbedImagePosition), LLamaSeqId.Zero, batch, _pastTokensCount);
+                        _pastTokensCount = end.Item3;
+
+                        _EmbedImagePosition = -1;
+                        _imageEmbedHandles.Clear();
+                        Images.Clear();
                     }
                     else
                     {
-                        tokensToKeep += Convert.ToInt32(Context.ShouldAddBosToken()); // always keep the BOS token
+                        Console.WriteLine("5");
+                        result = await Context.DecodeAsync(_embeds, LLamaSeqId.Zero, batch, _pastTokensCount);
+                        _pastTokensCount = result.Item3;
+                        Console.WriteLine("6");
+                        if (result.Item1 != DecodeResult.Ok) throw new LLamaDecodeError(result.Item1);
                     }
 
-                    HandleRunOutOfContext(tokensToKeep);
+                    Console.WriteLine("7");
+                    if (_embeds.Count > 0 && !string.IsNullOrEmpty(_pathSession))
+                    {
+                        Console.WriteLine("8");
+                        _session_tokens.AddRange(_embeds);
+                        _n_session_consumed = _session_tokens.Count;
+                    }
                 }
+                Console.WriteLine("9");
+                _embeds.Clear();
 
-                TryReuseMatchingPrefix();
-
-                // Changes to support Multi-Modal LLMs.
-                //
-                (DecodeResult, int, int) header, end, result;
-                if (IsMultiModal &&  _EmbedImagePosition > 0)
+                if (_embed_inps.Count <= _consumedTokensCount && !args.WaitForInput)
                 {
-                    // Tokens previous to the images
-                    header = await Context.DecodeAsync(_embeds.GetRange(0, _EmbedImagePosition), LLamaSeqId.Zero, batch, _pastTokensCount);
-                    _pastTokensCount = header.Item3;
+                    Console.WriteLine("10");
+                    var repeat_last_n = inferenceParams.RepeatLastTokensCount < 0 ? (int)Context.ContextSize : inferenceParams.RepeatLastTokensCount;
 
-                    if (header.Item1 != DecodeResult.Ok) throw new LLamaDecodeError(header.Item1);
-                   
-                    // Images
-                    foreach( var image in _imageEmbedHandles )
-                        ClipModel.EvalImageEmbed(Context, image, ref _pastTokensCount);
-                        
-                    // Post-image Tokens
-                    end = await Context.DecodeAsync(_embeds.GetRange(_EmbedImagePosition, _embeds.Count - _EmbedImagePosition), LLamaSeqId.Zero, batch, _pastTokensCount);
-                    _pastTokensCount = end.Item3;
+                    // optionally save the session on first sample (for faster prompt loading next time)
+                    if (!string.IsNullOrEmpty(_pathSession) && args.NeedToSaveSession)
+                    {
+                        args.NeedToSaveSession = false;
+                        SaveSessionFile(_pathSession);
+                    }
+                    Console.WriteLine("11");
+                    LLamaToken id;
+                    if (inferenceParams.SamplingPipeline is not null)
+                    {
+                        Console.WriteLine("12");
+                        id = inferenceParams.SamplingPipeline.Sample(Context.NativeHandle, Context.NativeHandle.GetLogitsIth(batch.TokenCount - 1), _last_n_tokens.ToArray());
+                        inferenceParams.SamplingPipeline.Accept(Context.NativeHandle, id);
+                    }
+                    else
+                    {
+                        Console.WriteLine("13");
+                        var tokenDataArray = Context.ApplyPenalty(batch.TokenCount - 1, _last_n_tokens, inferenceParams.LogitBias, repeat_last_n,
+                            inferenceParams.RepeatPenalty, inferenceParams.FrequencyPenalty, inferenceParams.PresencePenalty, inferenceParams.PenalizeNL);
 
-                    _EmbedImagePosition = -1;
-                    _imageEmbedHandles.Clear();
-                    Images.Clear();
+                        Console.WriteLine("14");
+                        var mu = MirostatMu;
+                        id = Context.Sample(
+                            tokenDataArray, ref mu, inferenceParams.Temperature, inferenceParams.Mirostat, inferenceParams.MirostatTau,
+                            inferenceParams.MirostatEta, inferenceParams.TopK, inferenceParams.TopP, inferenceParams.TfsZ, inferenceParams.TypicalP, inferenceParams.Grammar,
+                            inferenceParams.MinP
+                        );
+
+                        Console.WriteLine("5");
+                        MirostatMu = mu;
+                    }
+                    Console.WriteLine("16");
+                    _last_n_tokens.Enqueue(id);
+
+                    if (id == Context.NativeHandle.ModelHandle.Tokens.EOS)
+                    {
+                        Console.WriteLine("17");
+                        id = Context.NativeHandle.ModelHandle.Tokens.Newline!.Value;
+                        if (args.Antiprompts is not null && args.Antiprompts.Count > 0)
+                        {
+                            Console.WriteLine("18");
+                            var first_antiprompt = Context.Tokenize(args.Antiprompts[0], false);
+                            _embed_inps.AddRange(first_antiprompt);
+                        }
+                    }
+                    Console.WriteLine("9");
+                    _embeds.Add(id);
+
+                    args.RemainedTokens--;
+                    args.ReturnValue = true;
                 }
                 else
                 {
-                    result = await Context.DecodeAsync(_embeds, LLamaSeqId.Zero, batch, _pastTokensCount);
-                    _pastTokensCount = result.Item3;
-
-                    if (result.Item1 != DecodeResult.Ok) throw new LLamaDecodeError(result.Item1);
-                }
-                
-
-                if (_embeds.Count > 0 && !string.IsNullOrEmpty(_pathSession))
-                {
-                    _session_tokens.AddRange(_embeds);
-                    _n_session_consumed = _session_tokens.Count;
-                }
-            }
-
-            _embeds.Clear();
-
-            if (_embed_inps.Count <= _consumedTokensCount && !args.WaitForInput)
-            {
-                var repeat_last_n = inferenceParams.RepeatLastTokensCount < 0 ? (int)Context.ContextSize : inferenceParams.RepeatLastTokensCount;
-
-                // optionally save the session on first sample (for faster prompt loading next time)
-                if (!string.IsNullOrEmpty(_pathSession) && args.NeedToSaveSession)
-                {
-                    args.NeedToSaveSession = false;
-                    SaveSessionFile(_pathSession);
-                }
-
-                LLamaToken id;
-                if (inferenceParams.SamplingPipeline is not null)
-                {
-                    id = inferenceParams.SamplingPipeline.Sample(Context.NativeHandle, Context.NativeHandle.GetLogitsIth(batch.TokenCount - 1), _last_n_tokens.ToArray());
-                    inferenceParams.SamplingPipeline.Accept(Context.NativeHandle, id);
-                }
-                else
-                {
-                    var tokenDataArray = Context.ApplyPenalty(batch.TokenCount - 1, _last_n_tokens, inferenceParams.LogitBias, repeat_last_n,
-                        inferenceParams.RepeatPenalty, inferenceParams.FrequencyPenalty, inferenceParams.PresencePenalty, inferenceParams.PenalizeNL);
-
-                    var mu = MirostatMu;
-                    id = Context.Sample(
-                        tokenDataArray, ref mu, inferenceParams.Temperature, inferenceParams.Mirostat, inferenceParams.MirostatTau,
-                        inferenceParams.MirostatEta, inferenceParams.TopK, inferenceParams.TopP, inferenceParams.TfsZ, inferenceParams.TypicalP, inferenceParams.Grammar,
-                        inferenceParams.MinP
-                    );
-                    MirostatMu = mu;
-                }
-
-                _last_n_tokens.Enqueue(id);
-
-                if (id == Context.NativeHandle.ModelHandle.Tokens.EOS)
-                {
-                    id = Context.NativeHandle.ModelHandle.Tokens.Newline!.Value;
-                    if (args.Antiprompts is not null && args.Antiprompts.Count > 0)
+                    Console.WriteLine("20");
+                    while (_embed_inps.Count > _consumedTokensCount)
                     {
-                        var first_antiprompt = Context.Tokenize(args.Antiprompts[0], false);
-                        _embed_inps.AddRange(first_antiprompt);
+                        Console.WriteLine("21");
+                        _embeds.Add(_embed_inps[_consumedTokensCount]);
+                        _last_n_tokens.Enqueue(_embed_inps[_consumedTokensCount]);
+                        _consumedTokensCount++;
+                        if (_embeds.Count >= Context.BatchSize)
+                        {
+                            break;
+                        }
                     }
                 }
-
-                _embeds.Add(id);
-
-                args.RemainedTokens--;
-                args.ReturnValue = true;
             }
-            else
+            catch (Exception ex)
             {
-                while (_embed_inps.Count > _consumedTokensCount)
-                {
-                    _embeds.Add(_embed_inps[_consumedTokensCount]);
-                    _last_n_tokens.Enqueue(_embed_inps[_consumedTokensCount]);
-                    _consumedTokensCount++;
-                    if (_embeds.Count >= Context.BatchSize)
-                    {
-                        break;
-                    }
-                }
+                Console.WriteLine(ex.ToString());
             }
 
             return;

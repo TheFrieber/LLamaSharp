@@ -134,6 +134,7 @@ namespace LLama
             return NativeHandle.Tokenize(text, addBos, special, Encoding);
         }
 
+
         /// <summary>
         /// Detokenize the tokens to text.
         /// </summary>
@@ -480,41 +481,47 @@ namespace LLama
                                                 int repeatLastTokensCount = 64, float repeatPenalty = 1.1f, float alphaFrequency = .0f, float alphaPresence = .0f,
                                                 bool penalizeNL = true)
         {
-            var logits = NativeHandle.GetLogitsIth(logits_i);
+            Console.WriteLine("AP1");
+            var logits = NativeHandle.GetLogitsIth(0);
 
             // Apply params.logit_bias map
             if (logitBias is not null)
             {
+                Console.WriteLine("AP2");
                 foreach (var (key, value) in logitBias)
                     logits[(int)key] += value;
             }
-
+            Console.WriteLine("AP3");
             // Save the newline logit value
             var nl_token = NativeHandle.ModelHandle.Tokens.Newline;
             var nl_logit = logits[(int?)nl_token ?? 0];
-
+            Console.WriteLine("AP4");
             // Convert logits into token candidates
             if (_samplingBuffer == null || _samplingBuffer.Length < logits.Length)
                 _samplingBuffer = new LLamaTokenData[logits.Length];
             var candidates_p = LLamaTokenDataArray.Create(logits, _samplingBuffer);
-
+            Console.WriteLine("AP5");
             // Extract most recently returned tokens
             var last_n_repeat = Math.Min((int)ContextSize, repeatLastTokensCount);
             var last_n_array = lastTokens.TakeLast(last_n_repeat).ToArray();
-
+            Console.WriteLine("AP6");
             // Apply penalties to candidates
             candidates_p.RepetitionPenalty(NativeHandle, last_n_array, repeatPenalty, alphaFrequency, alphaPresence);
-
+            Console.WriteLine("AP7");
             // Restore newline token logit value if necessary
             if (!penalizeNL && nl_token.HasValue)
             {
+                Console.WriteLine("AP8");
+
                 var candidatesSpan = candidates_p.Data.Span;
                 for (var i = 0; i < candidates_p.Data.Length; i++)
                 {
+                    Console.WriteLine("AP9");
                     ref var item = ref candidatesSpan[i];
                     if (item.id == nl_token)
                         item.logit = nl_logit;
                 }
+                Console.WriteLine("AP10");
                 candidates_p.Sorted = false;
             }
 

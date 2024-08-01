@@ -209,6 +209,7 @@ namespace LLama
 
                 if (_embeds.Count > 0 && !string.IsNullOrEmpty(_pathSession))
                 {
+
                     _session_tokens.AddRange(_embeds);
                     _n_session_consumed = _session_tokens.Count;
                 }
