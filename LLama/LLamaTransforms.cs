@@ -66,22 +66,23 @@ namespace LLama
                 StringBuilder sb = new();
                 foreach (var message in history.Messages)
                 {
-                    if (message.AuthorRole == AuthorRole.User)
-                    {
-                        sb.AppendLine($"{_userName}: {message.Content}");
-                    }
-                    else if (message.AuthorRole == AuthorRole.System)
-                    {
-                        sb.AppendLine($"{_systemName}: {message.Content}");
-                    }
-                    else if (message.AuthorRole == AuthorRole.Unknown)
-                    {
-                        sb.AppendLine($"System: {message.Content}\n");
-                    }
-                    else if (message.AuthorRole == AuthorRole.Assistant)
-                    {
-                        sb.AppendLine($"{_assistantName}: {message.Content}");
-                    }
+                    //if (message.AuthorRole == AuthorRole.User)
+                    //{
+                    //    sb.AppendLine($"{_userName}: {message.Content}");
+                    //}
+                    //else if (message.AuthorRole == AuthorRole.System)
+                    //{
+                    //    sb.AppendLine($"{_systemName}: {message.Content}");
+                    //}
+                    //else if (message.AuthorRole == AuthorRole.Unknown)
+                    //{
+                    //    sb.AppendLine($"Memory: {message.Content}\n");
+                    //}
+                    //else if (message.AuthorRole == AuthorRole.Assistant)
+                    //{
+                    //    sb.AppendLine($"\n{_assistantName}: {message.Content}");
+                    //}
+                    sb.AppendLine($"{message.Content}");
                 }
                 return sb.ToString();
             }
@@ -93,23 +94,6 @@ namespace LLama
                 history.AddMessage(role, TrimNamesFromText(text, role));
                 return history;
             }
-
-            /// <summary>
-            /// Convert a ChatHistory instance to plain text for instruct mode.
-            /// </summary>
-            /// <param name="history">The ChatHistory instance</param>
-            /// <returns>A plain text representation of the history without names/roles.</returns>
-            public virtual string HistoryToTextInstruct(ChatHistory history)
-            {
-                StringBuilder sb = new();
-                foreach (var message in history.Messages)
-                {
-                    sb.AppendLine($"{message.Content}");
-
-                }
-                return sb.ToString();
-            }
-
 
             /// <summary>
             /// Convert a ChatHistory instance to plain text for instruct mode.

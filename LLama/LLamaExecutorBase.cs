@@ -208,7 +208,7 @@ namespace LLama
 
             _pastTokensCount -= Bridge.MaxTokens;
 
-            Console.WriteLine("[Native] Context Shift Applied: " + Bridge.MaxTokens);
+            //Console.WriteLine("[Native] Context Shift Applied: " + Bridge.MaxTokens);
 
 
             // stop saving session if we run out of context

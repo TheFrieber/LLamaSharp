@@ -230,15 +230,14 @@ namespace LLama
         {
             try
             {
-                Console.WriteLine("1");
                 var batch = new LLamaBatch();
 
                 if (_embeds.Count > 0)
                 {
                     _is_prompt_run = false;
+                    checkAgain:
                     if (_pastTokensCount + _embeds.Count > Context.ContextSize)
                     {
-                        Console.WriteLine("2");
                         // number of tokens to keep when resetting context
                         // Ported from https://github.com/ggerganov/llama.cpp/blob/60325fa56f61c228464c9f065db3aa6a61f2156e/examples/main/main.cpp#L334
                         var tokensToKeep = inferenceParams.TokensKeep;
@@ -252,11 +251,10 @@ namespace LLama
                         }
 
                         HandleRunOutOfContext(tokensToKeep);
+                        goto checkAgain;
                     }
-                    Console.WriteLine("3");
                     TryReuseMatchingPrefix();
 
-                    Console.WriteLine("4");
                     // Changes to support Multi-Modal LLMs.
                     //
                     (DecodeResult, int, int) header, end, result;
@@ -266,7 +264,11 @@ namespace LLama
                         header = await Context.DecodeAsync(_embeds.GetRange(0, _EmbedImagePosition), LLamaSeqId.Zero, batch, _pastTokensCount);
                         _pastTokensCount = header.Item3;
 
-                        if (header.Item1 != DecodeResult.Ok) throw new LLamaDecodeError(header.Item1);
+                        if (header.Item1 != DecodeResult.Ok)
+                        {
+
+                        }
+                            //throw new LLamaDecodeError(header.Item1);
 
                         // Images
                         foreach (var image in _imageEmbedHandles)
@@ -282,27 +284,25 @@ namespace LLama
                     }
                     else
                     {
-                        Console.WriteLine("5");
                         result = await Context.DecodeAsync(_embeds, LLamaSeqId.Zero, batch, _pastTokensCount);
                         _pastTokensCount = result.Item3;
-                        Console.WriteLine("6");
-                        if (result.Item1 != DecodeResult.Ok) throw new LLamaDecodeError(result.Item1);
+                        if (result.Item1 != DecodeResult.Ok)
+                        {
+
+                        } 
+                            //throw new LLamaDecodeError(result.Item1);
                     }
 
-                    Console.WriteLine("7");
                     if (_embeds.Count > 0 && !string.IsNullOrEmpty(_pathSession))
                     {
-                        Console.WriteLine("8");
                         _session_tokens.AddRange(_embeds);
                         _n_session_consumed = _session_tokens.Count;
                     }
                 }
-                Console.WriteLine("9");
                 _embeds.Clear();
 
                 if (_embed_inps.Count <= _consumedTokensCount && !args.WaitForInput)
                 {
-                    Console.WriteLine("10");
                     var repeat_last_n = inferenceParams.RepeatLastTokensCount < 0 ? (int)Context.ContextSize : inferenceParams.RepeatLastTokensCount;
 
                     // optionally save the session on first sample (for faster prompt loading next time)
@@ -311,21 +311,17 @@ namespace LLama
                         args.NeedToSaveSession = false;
                         SaveSessionFile(_pathSession);
                     }
-                    Console.WriteLine("11");
                     LLamaToken id;
                     if (inferenceParams.SamplingPipeline is not null)
                     {
-                        Console.WriteLine("12");
                         id = inferenceParams.SamplingPipeline.Sample(Context.NativeHandle, Context.NativeHandle.GetLogitsIth(batch.TokenCount - 1), _last_n_tokens.ToArray());
                         inferenceParams.SamplingPipeline.Accept(Context.NativeHandle, id);
                     }
                     else
                     {
-                        Console.WriteLine("13");
                         var tokenDataArray = Context.ApplyPenalty(batch.TokenCount - 1, _last_n_tokens, inferenceParams.LogitBias, repeat_last_n,
                             inferenceParams.RepeatPenalty, inferenceParams.FrequencyPenalty, inferenceParams.PresencePenalty, inferenceParams.PenalizeNL);
 
-                        Console.WriteLine("14");
                         var mu = MirostatMu;
                         id = Context.Sample(
                             tokenDataArray, ref mu, inferenceParams.Temperature, inferenceParams.Mirostat, inferenceParams.MirostatTau,
@@ -333,24 +329,19 @@ namespace LLama
                             inferenceParams.MinP
                         );
 
-                        Console.WriteLine("5");
                         MirostatMu = mu;
                     }
-                    Console.WriteLine("16");
                     _last_n_tokens.Enqueue(id);
 
                     if (id == Context.NativeHandle.ModelHandle.Tokens.EOS)
                     {
-                        Console.WriteLine("17");
                         id = Context.NativeHandle.ModelHandle.Tokens.Newline!.Value;
                         if (args.Antiprompts is not null && args.Antiprompts.Count > 0)
                         {
-                            Console.WriteLine("18");
                             var first_antiprompt = Context.Tokenize(args.Antiprompts[0], false);
                             _embed_inps.AddRange(first_antiprompt);
                         }
                     }
-                    Console.WriteLine("9");
                     _embeds.Add(id);
 
                     args.RemainedTokens--;
@@ -358,10 +349,8 @@ namespace LLama
                 }
                 else
                 {
-                    Console.WriteLine("20");
                     while (_embed_inps.Count > _consumedTokensCount)
                     {
-                        Console.WriteLine("21");
                         _embeds.Add(_embed_inps[_consumedTokensCount]);
                         _last_n_tokens.Enqueue(_embed_inps[_consumedTokensCount]);
                         _consumedTokensCount++;
