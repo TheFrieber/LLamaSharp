@@ -82,6 +82,7 @@ namespace LLama
                     //{
                     //    sb.AppendLine($"\n{_assistantName}: {message.Content}");
                     //}
+                    //KoboldCS: We handle it differently ourselfes.
                     sb.AppendLine($"{message.Content}");
                 }
                 return sb.ToString();

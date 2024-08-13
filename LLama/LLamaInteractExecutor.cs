@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using LLama.Exceptions;
 using Microsoft.Extensions.Logging;
+using static System.Net.Mime.MediaTypeNames;
 
 
 namespace LLama
@@ -119,7 +120,7 @@ namespace LLama
                 if (text == null) throw new ArgumentException("Prompt cannot be null to trigger continuation if a prompt has not been provided previously.");
                 if (!this.IsMultiModal)
                 {
-                    _embed_inps = Context.Tokenize(text, true, true).ToList();
+                    _embed_inps = Context.Tokenize(text, false, true).ToList(); // KoboldCS: We don't use the BOS token bc it makes me a lot work for no difference imo
                 }
                 else
                 {
@@ -131,10 +132,6 @@ namespace LLama
                 // Don't add any tokens if continuation is requested (by providing a null prompt)
                 if (text != null)
                 {
-                    if (!text.EndsWith("\n"))
-                    {
-                        text += "\n";
-                    }
 
                     if (!this.IsMultiModal)
                     {
@@ -234,7 +231,6 @@ namespace LLama
 
                 if (_embeds.Count > 0)
                 {
-                    _is_prompt_run = false;
                     checkAgain:
                     if (_pastTokensCount + _embeds.Count > Context.ContextSize)
                     {
@@ -266,7 +262,7 @@ namespace LLama
 
                         if (header.Item1 != DecodeResult.Ok)
                         {
-
+                            Console.WriteLine("[Decode Error}");
                         }
                             //throw new LLamaDecodeError(header.Item1);
 
@@ -284,13 +280,19 @@ namespace LLama
                     }
                     else
                     {
+                        if (_is_prompt_run)
+                        {
+                            _embeds.RemoveRange(0, _pastTokensCount);
+                            _is_prompt_run = false;
+                        }
                         result = await Context.DecodeAsync(_embeds, LLamaSeqId.Zero, batch, _pastTokensCount);
                         _pastTokensCount = result.Item3;
                         if (result.Item1 != DecodeResult.Ok)
                         {
+                            Console.WriteLine("[Decode Error}");
+                        }
 
-                        } 
-                            //throw new LLamaDecodeError(result.Item1);
+                        //throw new LLamaDecodeError(result.Item1);
                     }
 
                     if (_embeds.Count > 0 && !string.IsNullOrEmpty(_pathSession))
@@ -368,6 +370,152 @@ namespace LLama
 
             return;
         }
+
+
+
+
+
+
+
+
+
+
+        /// <summary>
+        /// KoboldCS: Help the Synchronizer back to Synchronize by reprocessing last response if the model splitted things into multiple tokens.
+        /// </summary>
+        /// <param name="lastResponse"></param>
+        /// <returns></returns>
+        public async Task ReDecode(List<LLamaToken> lastResponse, int beginningPos)
+        {
+            try
+            {
+                checkAgain:
+                if ((lastResponse.Count + Context.NativeHandle.KvCacheCountCells()) >= Context.ContextSize)
+                {
+                    HandleRunOutOfContext(0);
+                    goto checkAgain;
+                }
+
+                //Remove the faulty response.
+                Context.NativeHandle.KvCacheRemove(LLamaSeqId.Zero, beginningPos, Context.NativeHandle.KvCacheCountCells());
+                Context.NativeHandle.KvCacheUpdate();
+
+                var batch = new LLamaBatch();
+
+                (DecodeResult, int, int) result;
+                result = await Context.DecodeAsync(lastResponse, LLamaSeqId.Zero, batch, Context.NativeHandle.KvCacheCountCells());
+                _pastTokensCount = result.Item3;
+                if (result.Item1 != DecodeResult.Ok)
+                {
+                    Console.WriteLine("[ReDecode Error]");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+
+            return;
+        }
+
+        /// <summary>
+        /// KoboldCS: Instead of clearing the whole cache, setting it up again then messing the Synchronizer up because we can't measure before generation.. Just overwrite it in SetContext
+        /// </summary>
+        /// <param name="lastResponse"></param>
+        /// <param name="mempos">We also want to update the Memory. This defines the Tokencount of the memory. After that we seperate excess.</param>
+        /// <returns></returns>
+        public async Task UpdateWithDecode(List<LLamaToken> lastResponse, int mempos)
+        {
+            if (lastResponse.Count == 0) return;
+
+            try
+            {
+                var batch = new LLamaBatch();
+
+                // Extract memory tokens from lastResponse
+                List<LLamaToken> memoryTokens = lastResponse.GetRange(0, mempos);
+                lastResponse.RemoveRange(0, mempos);
+
+                int totalSize = memoryTokens.Count + lastResponse.Count;
+
+                // remove from the lastResponse until it fits the context
+                if (totalSize >= Context.ContextSize)
+                {
+                    // Calculate the excess amount that needs to be removed
+                    int excess = totalSize - (int)Context.ContextSize;
+
+                    // Remove that many elements from the beginning of lastResponse
+                    if (excess > 0 && excess <= lastResponse.Count)
+                    {
+                        lastResponse.RemoveRange(0, excess + 1); // +1 to be save it fits within the context size
+                    }
+                }
+
+                // And now combine memoryTokens and lastResponse back together for Decoding.
+                memoryTokens.AddRange(lastResponse);
+
+                Context.NativeHandle.KvCacheClear();
+                (DecodeResult, int, int) result;
+                result = await Context.DecodeAsync(memoryTokens, LLamaSeqId.Zero, batch, 0);
+                Console.WriteLine("Updated: " + Context.NativeHandle.KvCacheCountCells() + "\n" + "Updated H: " + memoryTokens.Count + "\n" + "TotalSize: " + totalSize);
+                _pastTokensCount = result.Item3;
+                if (result.Item1 != DecodeResult.Ok)
+                {
+                    Console.WriteLine("[UpdateWithDecode Error]");
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+
+            return;
+        }
+
+        /// <summary>
+        /// KoboldCS: There is a bug with the last char not getting decoded and stays in the _embeds container for the next gen. This is an issue we do need before trimming in the ctx
+        /// </summary>
+        /// <returns></returns>
+        public async Task Cleanup()
+        {
+
+            try
+            {
+                if(_embeds.Count == 1)
+                {
+                    var batch = new LLamaBatch();
+
+
+                    (DecodeResult, int, int) result;
+                    result = await Context.DecodeAsync(_embeds, LLamaSeqId.Zero, batch, _pastTokensCount);
+                    _pastTokensCount = result.Item3;
+                    if (result.Item1 != DecodeResult.Ok)
+                    {
+                        Console.WriteLine("[Cleanup Error]");
+                    }
+                    _embeds.Clear();
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
+
+            return;
+        }
+
+        /// <summary>
+        /// KoboldCS: When doing stuff with context, we do want that llamaSharp knows it. This is an access port simple said.
+        /// </summary>
+        /// <returns></returns>
+        public int PastTokensCount
+        {
+            get { return _pastTokensCount; }
+            set { _pastTokensCount = value; }
+        }
+
 
         /// <summary>
         /// The descriptor of the state of the interactive executor.

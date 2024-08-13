@@ -660,7 +660,7 @@ namespace LLama.Native
         /// </summary>
         public sealed class ModelTokens
         {
-            private readonly SafeLlamaModelHandle _model;
+            private static SafeLlamaModelHandle _model;
             private readonly string? _eot;
             private readonly string? _eos;
 
@@ -671,7 +671,15 @@ namespace LLama.Native
                 _eos = LLamaTokenToString(EOS, true);
             }
 
-            private string? LLamaTokenToString(LLamaToken? token, bool isSpecialToken)
+            public static async Task DeTokenize(List<LLamaToken> text)
+            {
+                foreach (var item in text)
+                {
+                    Console.Write(LLamaTokenToString(item, false));
+                }
+            }
+
+            private static string? LLamaTokenToString(LLamaToken? token, bool isSpecialToken)
             {
                 const int buffSize = 32;
                 Span<byte> buff = stackalloc byte[buffSize];

@@ -52,7 +52,7 @@ public class ChatSession
     /// <summary>
     /// The chat history for this session.
     /// </summary>
-    public ChatHistory History { get; private set; } = new();
+    public ChatHistory History { get; set; } = new();
 
     /// <summary>
     /// The history transform used in this session.
